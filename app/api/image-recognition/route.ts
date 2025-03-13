@@ -110,6 +110,11 @@ export async function POST(req: NextRequest) {
   2. Raza (sé específico si es posible, o "mestizo" si no está claro)
   3. Color (IMPORTANTE: debes elegir SOLAMENTE UNO de estos valores: ${colorOptionsStr})
   4. Una breve descripción única destacando cualquier característica distintiva
+  5. Debes basar tu respuesta en la realidad y no en la ficción
+
+  posdata: para animales con pelo carey o calico deberas elegir "tricolor" SIEMPRE.
+  ejemplo extra: si hay un gato al cual solo se le ven dos colores en la imagen (negro y marrón) 
+  pero sospechas que es carey o calico igual, deberas elegir "tricolor".
 
   Formatea tu respuesta estrictamente como un objeto JSON con la siguiente estructura:
   {
@@ -128,8 +133,8 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.AI_KEY}`,
-        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-        "X-Title": "Pet Identification App",
+        "HTTP-Referer": "https://huellafiel.com.ar",
+        "X-Title": "HuellaFiel",
       },
       body: JSON.stringify({
         model: "qwen/qwen2.5-vl-72b-instruct:free",
