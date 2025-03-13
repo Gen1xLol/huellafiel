@@ -180,21 +180,21 @@ export async function POST(req: NextRequest) {
       // Construir los términos de búsqueda correctamente para tsquery
       const searchTerms = `${petInfo.species} & ${petInfo.breed} & ${petInfo.color}`.toLowerCase();
 
-      // Opción 2: Usar el operador OR para buscar coincidencias parciales
-      const { data: textSearchMatches, error: searchError } = await supabase
+      const { data, error: searchError } = await supabase
         .from("pets")
-        .select("*")
-        .or(
-          `species.like.%${petInfo.species}%, breed.like.%${petInfo.breed}%, color.like.%${petInfo.color}%`
-        );
+        .select()
+        .ilike("species", petInfo.species)
+        .ilike("breed", petInfo.breed)
+        .ilike("color", petInfo.color)
+        .limit(20)
 
       if (searchError) {
         console.error("Text search error:", searchError)
         // Fallback a la búsqueda básica si hay error
         const { data: speciesMatches, error: speciesError } = await supabase
           .from("pets")
-          .select("*")
-          .eq("species", petInfo.species.toLowerCase())
+          .select()
+          .ilike("species", petInfo.species.toLowerCase())
 
         if (speciesError) {
           console.error("Database query error:", speciesError)
@@ -277,15 +277,16 @@ export async function POST(req: NextRequest) {
           petInfo.similarPets = []
         }
       } else {
+        console.log(data);
         // Process text search results
-        console.log(`Found ${textSearchMatches?.length || 0} pets with text search`)
+        console.log(`Found ${data?.length || 0} pets with text search`)
 
-        if (textSearchMatches && textSearchMatches.length > 0) {
+        if (data && data.length > 0) {
           // Score each pet based on text search relevance and add match reasons
-          const scoredPets = textSearchMatches.map((pet, index) => {
+          const scoredPets = data.map((pet, index) => {
             // Calculate a score based on position in results (first results are more relevant)
             // Score range: 95 (first result) to 40 (last result)
-            const positionScore = Math.max(95 - (index * 55) / textSearchMatches.length, 40)
+            const positionScore = Math.max(95 - (index * 55) / data.length, 40)
 
             // Determine match reasons
             const matchReasons = []
