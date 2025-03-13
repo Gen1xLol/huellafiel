@@ -178,13 +178,15 @@ export async function POST(req: NextRequest) {
     // Search for similar pets in the database using text search
     try {
       // Construir los términos de búsqueda correctamente para tsquery
-const searchTerms = `${petInfo.species} & ${petInfo.breed} & ${petInfo.color}`.toLowerCase();
+      const searchTerms = `${petInfo.species} & ${petInfo.breed} & ${petInfo.color}`.toLowerCase();
 
-// Opción 1: Usar el operador & para AND entre términos
-const { data: textSearchMatches, error: searchError } = await supabase
-  .from("pets")
-  .select("*")
-  .textSearch("species", petInfo.species);
+      // Opción 2: Usar el operador OR para buscar coincidencias parciales
+      const { data: textSearchMatches, error: searchError } = await supabase
+        .from("pets")
+        .select("*")
+        .or(
+          `species.like.%${petInfo.species}%, breed.like.%${petInfo.breed}%, color.like.%${petInfo.color}%`
+        );
 
       if (searchError) {
         console.error("Text search error:", searchError)
