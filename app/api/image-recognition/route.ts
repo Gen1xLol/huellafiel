@@ -103,24 +103,24 @@ export async function POST(req: NextRequest) {
 
     // Prepare the prompt for the AI (in Spanish)
     const prompt = `
-    Eres un experto en identificación de mascotas. Analiza la siguiente imagen de mascota y proporciona información detallada.
-    
-    Para la imagen de mascota proporcionada, identifica los siguientes atributos:
-    1. Especie (IMPORTANTE: debes elegir SOLAMENTE UNA de estas opciones: ${speciesOptionsStr})
-    2. Raza (sé específico si es posible, o "mestizo" si no está claro)
-    3. Color (IMPORTANTE: debes elegir SOLAMENTE UNO de estos valores: ${colorOptionsStr})
-    4. Una breve descripción única destacando cualquier característica distintiva
+  Eres un experto en identificación de mascotas. Analiza la siguiente imagen de mascota y proporciona información detallada.
+  
+  Para la imagen de mascota proporcionada, identifica los siguientes atributos:
+  1. Especie (IMPORTANTE: debes elegir SOLAMENTE UNA de estas opciones: ${speciesOptionsStr})
+  2. Raza (sé específico si es posible, o "mestizo" si no está claro)
+  3. Color (IMPORTANTE: debes elegir SOLAMENTE UNO de estos valores: ${colorOptionsStr})
+  4. Una breve descripción única destacando cualquier característica distintiva
 
-    Formatea tu respuesta estrictamente como un objeto JSON con la siguiente estructura:
-    {
-      "species": "la especie identificada (usando SOLO los valores permitidos)",
-      "breed": "la raza identificada",
-      "color": "el color identificado (usando SOLO los valores permitidos)",
-      "description": "una breve descripción única de características distintivas"
-    }
-    
-    Devuelve SOLO el objeto JSON, sin texto o explicaciones adicionales.
-    `
+  Formatea tu respuesta estrictamente como un objeto JSON con la siguiente estructura:
+  {
+    "species": "la especie identificada (usando SOLO los valores permitidos)",
+    "breed": "la raza identificada",
+    "color": "el color identificado (usando SOLO los valores permitidos)",
+    "description": "una breve descripción única de características distintivas"
+  }
+  
+  Devuelve SOLO el objeto JSON, sin texto o explicaciones adicionales.
+  `
 
     // Call OpenRouter API
     const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -175,102 +175,162 @@ export async function POST(req: NextRequest) {
 
     console.log("Processed pet info:", petInfo)
 
-    // Search for similar pets in the database
+    // Search for similar pets in the database using text search
     try {
-      // First, get all pets with the same species (most important attribute)
-      const { data: speciesMatches, error: speciesError } = await supabase
-        .from("pets")
-        .select("*")
-        .eq("species_normalized", petInfo.species.toLowerCase())
+      // Construir los términos de búsqueda correctamente para tsquery
+const searchTerms = `${petInfo.species} & ${petInfo.breed} & ${petInfo.color}`.toLowerCase();
 
-      if (speciesError) {
-        console.error("Database query error:", speciesError)
-        return NextResponse.json({
-          ...petInfo,
-          error: "Database query error",
-          similarPets: [],
-        })
-      }
+// Opción 1: Usar el operador & para AND entre términos
+const { data: textSearchMatches, error: searchError } = await supabase
+  .from("pets")
+  .select("*")
+  .textSearch("species", petInfo.species);
 
-      console.log(`Found ${speciesMatches?.length || 0} pets with matching species`)
+      if (searchError) {
+        console.error("Text search error:", searchError)
+        // Fallback a la búsqueda básica si hay error
+        const { data: speciesMatches, error: speciesError } = await supabase
+          .from("pets")
+          .select("*")
+          .eq("species", petInfo.species.toLowerCase())
 
-      // If no species matches, try to get any pets
-      let allPets = speciesMatches
-      if (!allPets || allPets.length === 0) {
-        const { data: anyPets, error: anyPetsError } = await supabase.from("pets").select("*").limit(20)
-
-        if (!anyPetsError && anyPets) {
-          allPets = anyPets
-          console.log(`No species matches, using ${allPets.length} random pets instead`)
+        if (speciesError) {
+          console.error("Database query error:", speciesError)
+          return NextResponse.json({
+            ...petInfo,
+            error: "Database query error",
+            similarPets: [],
+          })
         }
-      }
 
-      // Score each pet based on attribute similarity
-      if (allPets && allPets.length > 0) {
-        const scoredPets = allPets.map((pet) => {
-          let score = 0
-          const matchReasons = []
+        console.log(`Found ${speciesMatches?.length || 0} pets with matching species (fallback search)`)
 
-          // Species match (most important)
-          if (pet.species_normalized === petInfo.species.toLowerCase()) {
-            score += 50
-            matchReasons.push("especie")
-          } else {
-            // If species doesn't match, give a very low base score
-            score += 10
-          }
+        // Score each pet based on attribute similarity
+        if (speciesMatches && speciesMatches.length > 0) {
+          const scoredPets = speciesMatches.map((pet) => {
+            let score = 0
+            const matchReasons = []
 
-          // Breed match
-          if (pet.breed_normalized && petInfo.breed) {
-            if (pet.breed_normalized === petInfo.breed.toLowerCase()) {
-              score += 30
-              matchReasons.push("raza")
-            } else if (
-              pet.breed_normalized.includes(petInfo.breed.toLowerCase()) ||
-              petInfo.breed.toLowerCase().includes(pet.breed_normalized)
-            ) {
-              score += 15
-              matchReasons.push("raza similar")
-            }
-          }
-
-          // Color match
-          if (pet.color_normalized && petInfo.color) {
-            if (pet.color_normalized === petInfo.color.toLowerCase()) {
-              score += 20
-              matchReasons.push("color")
-            } else if (
-              pet.color_normalized.includes(petInfo.color.toLowerCase()) ||
-              petInfo.color.toLowerCase().includes(pet.color_normalized)
-            ) {
+            // Species match (most important)
+            if (pet.species.toLowerCase() === petInfo.species.toLowerCase()) {
+              score += 50
+              matchReasons.push("especie")
+            } else {
+              // If species doesn't match, give a very low base score
               score += 10
-              matchReasons.push("color similar")
             }
-          }
 
-          // Add some randomness for variety (±5%)
-          const randomFactor = Math.floor(Math.random() * 10) - 5
-          const finalScore = Math.min(Math.max(score + randomFactor, 10), 95)
+            // Breed match
+            if (pet.breed && petInfo.breed) {
+              if (pet.breed.toLowerCase() === petInfo.breed.toLowerCase()) {
+                score += 30
+                matchReasons.push("raza")
+              } else if (
+                pet.breed.toLowerCase().includes(petInfo.breed.toLowerCase()) ||
+                petInfo.breed.toLowerCase().includes(pet.breed.toLowerCase())
+              ) {
+                score += 15
+                matchReasons.push("raza similar")
+              }
+            }
 
-          return {
-            ...pet,
-            matchScore: finalScore,
-            matchReasons,
-          }
-        })
+            // Color match
+            if (pet.color && petInfo.color) {
+              if (pet.color.toLowerCase() === petInfo.color.toLowerCase()) {
+                score += 20
+                matchReasons.push("color")
+              } else if (
+                pet.color.toLowerCase().includes(petInfo.color.toLowerCase()) ||
+                petInfo.color.toLowerCase().includes(pet.color.toLowerCase())
+              ) {
+                score += 10
+                matchReasons.push("color similar")
+              }
+            }
 
-        // Filter pets with a minimum score and sort by score
-        const filteredPets = scoredPets
-          .filter((pet) => pet.matchScore >= 20) // Minimum threshold
-          .sort((a, b) => b.matchScore - a.matchScore)
-          .slice(0, 20) // Limit to top 20 matches
+            // Add some randomness for variety (±5%)
+            const randomFactor = Math.floor(Math.random() * 10) - 5
+            const finalScore = Math.min(Math.max(score + randomFactor, 10), 95)
 
-        // Add the scored pets to the response
-        petInfo.similarPets = filteredPets
-        console.log(`Found ${filteredPets.length} potential matches out of ${allPets.length} total pets`)
+            return {
+              ...pet,
+              matchScore: finalScore,
+              matchReasons,
+            }
+          })
+
+          // Filter pets with a minimum score and sort by score
+          const filteredPets = scoredPets
+            .filter((pet) => pet.matchScore >= 20) // Minimum threshold
+            .sort((a, b) => b.matchScore - a.matchScore)
+            .slice(0, 20) // Limit to top 20 matches
+
+          // Add the scored pets to the response
+          petInfo.similarPets = filteredPets
+          console.log(
+            `Found ${filteredPets.length} potential matches out of ${speciesMatches.length} total pets (fallback search)`,
+          )
+        } else {
+          console.log("No pets found in database (fallback search)")
+          petInfo.similarPets = []
+        }
       } else {
-        console.log("No pets found in database")
-        petInfo.similarPets = []
+        // Process text search results
+        console.log(`Found ${textSearchMatches?.length || 0} pets with text search`)
+
+        if (textSearchMatches && textSearchMatches.length > 0) {
+          // Score each pet based on text search relevance and add match reasons
+          const scoredPets = textSearchMatches.map((pet, index) => {
+            // Calculate a score based on position in results (first results are more relevant)
+            // Score range: 95 (first result) to 40 (last result)
+            const positionScore = Math.max(95 - (index * 55) / textSearchMatches.length, 40)
+
+            // Determine match reasons
+            const matchReasons = []
+
+            if (pet.species.toLowerCase() === petInfo.species.toLowerCase()) {
+              matchReasons.push("especie")
+            }
+
+            if (
+              pet.breed &&
+              petInfo.breed &&
+              (pet.breed.toLowerCase() === petInfo.breed.toLowerCase() ||
+                pet.breed.toLowerCase().includes(petInfo.breed.toLowerCase()) ||
+                petInfo.breed.toLowerCase().includes(pet.breed.toLowerCase()))
+            ) {
+              matchReasons.push("raza")
+            }
+
+            if (
+              pet.color &&
+              petInfo.color &&
+              (pet.color.toLowerCase() === petInfo.color.toLowerCase() ||
+                pet.color.toLowerCase().includes(petInfo.color.toLowerCase()) ||
+                petInfo.color.toLowerCase().includes(pet.color.toLowerCase()))
+            ) {
+              matchReasons.push("color")
+            }
+
+            // If no specific reasons found, it's a general text match
+            if (matchReasons.length === 0) {
+              matchReasons.push("características similares")
+            }
+
+            return {
+              ...pet,
+              matchScore: Math.round(positionScore),
+              matchReasons,
+            }
+          })
+
+          // Add the scored pets to the response
+          petInfo.similarPets = scoredPets.slice(0, 20) // Limit to top 20 matches
+          console.log(`Processed ${scoredPets.length} text search matches`)
+        } else {
+          console.log("No text search matches found")
+          petInfo.similarPets = []
+        }
       }
 
       return NextResponse.json(petInfo)
@@ -315,4 +375,3 @@ export async function GET() {
     })
   }
 }
-
