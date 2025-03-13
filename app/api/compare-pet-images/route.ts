@@ -163,7 +163,7 @@ Devuelve SOLO el objeto JSON, sin texto o explicaciones adicionales.
         "X-Title": "HuellaFiel",
       },
       body: JSON.stringify({
-        model: "qwen/qwen2.5-vl-72b-instruct:free",
+        model: "google/gemma-3-27b-it:free",
         messages: messages,
       }),
     })
