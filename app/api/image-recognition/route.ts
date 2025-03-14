@@ -110,7 +110,8 @@ export async function POST(req: NextRequest) {
   2. Raza (sé específico si es posible, o "mestizo" si no está claro)
   3. Color (IMPORTANTE: debes elegir SOLAMENTE UNO de estos valores: ${colorOptionsStr})
   4. Una breve descripción única destacando cualquier característica distintiva
-  5. Debes basar tu respuesta en la realidad y no en la ficción
+  5. Debes basar tu respuesta en la realidad (por ejemplo, categorizar correctamente a un gato atigrado, sin
+  asignarselo al gato equivocado)
 
   posdata: para animales con pelo carey o calico deberas elegir "tricolor" SIEMPRE.
   ejemplo extra: si hay un gato al cual solo se le ven dos colores en la imagen (negro y marrón) 
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
         "X-Title": "HuellaFiel",
       },
       body: JSON.stringify({
-        model: "google/gemma-3-12b-it:free",
+        model: "google/gemma-3-27b-it:free",
         messages: [
           {
             role: "user",
