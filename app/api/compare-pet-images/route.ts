@@ -11,6 +11,24 @@ interface CompareRequest {
   }[]
 }
 
+function removeContactKeys(array) {
+    // Create a new array to avoid modifying the original
+    return array.map(item => {
+      // Create a new object to hold the filtered properties
+      const filteredItem = {};
+      
+      // Loop through all keys in the current item
+      for (const key in item) {
+        // Only keep keys that don't contain "contact_"
+        if (!key.includes("contact_")) {
+          filteredItem[key] = item[key];
+        }
+      }
+      
+      return filteredItem;
+    });
+  }
+
 // Function to compress an image if needed - reused from the provided example
 async function compressImageIfNeeded(imageUrl: string): Promise<string> {
   // Fetch the image
@@ -199,8 +217,10 @@ Devuelve SOLO el objeto JSON, sin texto o explicaciones adicionales.
       return NextResponse.json({ error: "Formato de respuesta de IA inválido" }, { status: 500 })
     }
 
+    let final = removeContactKeys(comparisonResults.comparisons)
+
     // Return results
-    return NextResponse.json(comparisonResults)
+    return NextResponse.json(final)
   } catch (error) {
     console.error('Error in image comparison API:', error)
     return NextResponse.json(
