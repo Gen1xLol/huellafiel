@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
         "X-Title": "HuellaFiel",
       },
       body: JSON.stringify({
-        model: "google/gemma-3-27b-it:free",
+        model: "meta-llama/llama-3.2-11b-vision-instruct:free",
         messages: [
           {
             role: "user",
