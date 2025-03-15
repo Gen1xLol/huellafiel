@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
   posdata: para animales con pelo carey o calico deberas elegir "tricolor" SIEMPRE.
   ejemplo extra: si hay un gato al cual solo se le ven dos colores en la imagen (negro y marrón) 
-  pero sospechas que es carey o calico igual, deberas elegir "tricolor" en vez de "atigrado".
+  pero sospechas que es carey o calico igual, deberas elegir "tricolor" en vez de "atigrado" o "manchado".
 
   Formatea tu respuesta estrictamente como un objeto JSON con la siguiente estructura:
   {
