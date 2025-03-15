@@ -10,30 +10,23 @@ interface CompareRequest {
   }[]
 }
 
-interface ComparisonResult {
-  petId: string;
-  similarityScore: number;
-  confidence: number;
-  justification: string;
-}
-
-function removeContactKeys(array: ComparisonResult[]): Omit<ComparisonResult, 'justification'>[] {
-  // Create a new array to avoid modifying the original
-  return array.map(item => {
-    // Create a new object to hold the filtered properties
-    const filteredItem: Partial<ComparisonResult> = {};
-    
-    // Loop through all keys in the current item
-    for (const key in item) {
-      // Only keep keys that don't contain "contact_"
-      if (!key.includes("contact_")) {
-        filteredItem[key as keyof ComparisonResult] = item[key as keyof ComparisonResult];
+function removeContactKeys(array) {
+    // Create a new array to avoid modifying the original
+    return array.map(item => {
+      // Create a new object to hold the filtered properties
+      const filteredItem = {};
+      
+      // Loop through all keys in the current item
+      for (const key in item) {
+        // Only keep keys that don't contain "contact_"
+        if (!key.includes("contact_")) {
+          filteredItem[key] = item[key];
+        }
       }
-    }
-    
-    return filteredItem as Omit<ComparisonResult, 'justification'>;
-  });
-}
+      
+      return filteredItem;
+    });
+  }
 
 // Function to compress an image if needed - reused from the provided example
 async function compressImageIfNeeded(imageUrl: string): Promise<string> {
