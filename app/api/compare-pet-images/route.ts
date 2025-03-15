@@ -181,7 +181,7 @@ Devuelve SOLO el objeto JSON, sin texto o explicaciones adicionales.
         "X-Title": "HuellaFiel",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.2-11b-vision-instruct:free",
+        model: "google/gemini-2.0-pro-exp-02-05:free",
         messages: messages,
       }),
     })
