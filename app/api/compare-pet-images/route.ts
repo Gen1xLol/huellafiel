@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
-import { getSession } from '@/lib/session'
+import { createServerClient } from "@/utils/supabase/server"
 import sharp from 'sharp'
 
 interface CompareRequest {
@@ -11,23 +10,30 @@ interface CompareRequest {
   }[]
 }
 
-function removeContactKeys(array) {
-    // Create a new array to avoid modifying the original
-    return array.map(item => {
-      // Create a new object to hold the filtered properties
-      const filteredItem = {};
-      
-      // Loop through all keys in the current item
-      for (const key in item) {
-        // Only keep keys that don't contain "contact_"
-        if (!key.includes("contact_")) {
-          filteredItem[key] = item[key];
-        }
+interface ComparisonResult {
+  petId: string;
+  similarityScore: number;
+  confidence: number;
+  justification: string;
+}
+
+function removeContactKeys(array: ComparisonResult[]): Omit<ComparisonResult, 'justification'>[] {
+  // Create a new array to avoid modifying the original
+  return array.map(item => {
+    // Create a new object to hold the filtered properties
+    const filteredItem: Partial<ComparisonResult> = {};
+    
+    // Loop through all keys in the current item
+    for (const key in item) {
+      // Only keep keys that don't contain "contact_"
+      if (!key.includes("contact_")) {
+        filteredItem[key as keyof ComparisonResult] = item[key as keyof ComparisonResult];
       }
-      
-      return filteredItem;
-    });
-  }
+    }
+    
+    return filteredItem as Omit<ComparisonResult, 'justification'>;
+  });
+}
 
 // Function to compress an image if needed - reused from the provided example
 async function compressImageIfNeeded(imageUrl: string): Promise<string> {
@@ -57,8 +63,10 @@ async function compressImageIfNeeded(imageUrl: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
-    // Validate user session
-    const session = await getSession()
+    const supabase = createServerClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
