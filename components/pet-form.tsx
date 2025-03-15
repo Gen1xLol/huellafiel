@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,9 @@ import { useToast } from "@/hooks/use-toast"
 import type { Pet, PetPhoto } from "@/types/pet"
 import PhotoUploader from "./photo-uploader"
 import { Loader2, Wand2 } from "lucide-react"
+import { classifyImage, loadModel } from "@/utils/image-recognition"
 import { SPECIES_OPTIONS, DOG_BREEDS, CAT_BREEDS, BIRD_BREEDS, OTHER_BREEDS, PET_COLORS } from "@/utils/pet-options"
+import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface PetFormProps {
@@ -27,14 +29,54 @@ export default function PetForm({ userId, pet }: PetFormProps) {
   const { toast } = useToast()
   const supabase = createClient()
   const [isLoading, setIsLoading] = useState(false)
+  const [isModelLoading, setIsModelLoading] = useState(true)
+  const [modelLoadingProgress, setModelLoadingProgress] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [photos, setPhotos] = useState<File[]>([])
   const [existingPhotos, setExistingPhotos] = useState<PetPhoto[]>(pet?.pet_photos || [])
   const [selectedSpecies, setSelectedSpecies] = useState<string>(pet?.species || "perro")
   const [selectedBreed, setSelectedBreed] = useState<string>(pet?.breed || "")
   const [selectedColor, setSelectedColor] = useState<string>(pet?.color || "")
+  const [modelError, setModelError] = useState<string | null>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [detectionResult, setDetectionResult] = useState<any>(null)
+
+  // Cargar el modelo de TensorFlow.js al montar el componente
+  useEffect(() => {
+    async function initModel() {
+      try {
+        setModelLoadingProgress(10)
+        // Simular progreso de carga
+        const progressInterval = setInterval(() => {
+          setModelLoadingProgress((prev) => {
+            if (prev >= 90) {
+              clearInterval(progressInterval)
+              return prev
+            }
+            return prev + 10
+          })
+        }, 500)
+
+        await loadModel()
+        clearInterval(progressInterval)
+        setModelLoadingProgress(100)
+        setIsModelLoading(false)
+        setModelError(null)
+      } catch (error: any) {
+        console.error("Error al cargar el modelo:", error)
+        setModelError(error.message || "Error desconocido al cargar el modelo")
+        setIsModelLoading(false)
+        toast({
+          title: "Error",
+          description: `No se pudo cargar el modelo de reconocimiento: ${error.message}`,
+          variant: "destructive",
+        })
+      }
+    }
+
+    initModel()
+  }, [toast])
 
   // Actualizar la URL de vista previa cuando cambian las fotos
   useEffect(() => {
@@ -163,7 +205,7 @@ export default function PetForm({ userId, pet }: PetFormProps) {
     }
   }
 
-  // Función para analizar la imagen usando la API
+  // Función para analizar la imagen y autocompletar los campos
   const analyzeImage = async () => {
     if (!previewUrl) {
       toast({
@@ -178,21 +220,16 @@ export default function PetForm({ userId, pet }: PetFormProps) {
     setDetectionResult(null)
 
     try {
-      // Llamar a nuestra nueva API de identificación de mascotas
-      const response = await fetch("/api/pet-identification", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ imageUrl: previewUrl }),
+      // Crear una imagen temporal para el análisis
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      img.src = previewUrl
+
+      await new Promise((resolve) => {
+        img.onload = resolve
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Error al analizar la imagen")
-      }
-
-      const classification = await response.json()
+      const classification = await classifyImage(img)
       console.log("Resultado de la clasificación:", classification)
 
       // Guardar el resultado para mostrarlo
@@ -234,6 +271,27 @@ export default function PetForm({ userId, pet }: PetFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {isModelLoading && (
+        <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+          <div className="flex items-center space-x-4">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Cargando modelos de IA avanzados...</p>
+              <Progress value={modelLoadingProgress} className="h-2 mt-2" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Estamos cargando modelos de reconocimiento de imágenes más precisos para identificar mejor a tu mascota.
+          </p>
+        </div>
+      )}
+
+      {modelError && (
+        <Alert variant="destructive">
+          <AlertDescription>Error al cargar el modelo de IA: {modelError}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-4">
         <h3 className="text-lg font-medium">Información Básica</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -314,7 +372,7 @@ export default function PetForm({ userId, pet }: PetFormProps) {
             variant="outline"
             size="sm"
             onClick={analyzeImage}
-            disabled={isAnalyzing || !previewUrl}
+            disabled={isModelLoading || isAnalyzing || !previewUrl}
           >
             {isAnalyzing ? (
               <>
@@ -329,6 +387,17 @@ export default function PetForm({ userId, pet }: PetFormProps) {
             )}
           </Button>
         </div>
+
+        {/* Imagen oculta para referencia del modelo */}
+        {previewUrl && (
+          <img
+            ref={imageRef}
+            src={previewUrl || "/placeholder.svg"}
+            alt="Referencia para análisis"
+            className="hidden"
+            crossOrigin="anonymous"
+          />
+        )}
 
         <PhotoUploader existingPhotos={existingPhotos} onPhotosSelected={setPhotos} onDeletePhoto={handleDeletePhoto} />
 
@@ -357,12 +426,6 @@ export default function PetForm({ userId, pet }: PetFormProps) {
                 <span className="font-medium">{Math.round(detectionResult.confidence * 100)}%</span>
               </div>
             </div>
-            {detectionResult.description && (
-              <div className="text-sm mt-2">
-                <span className="text-muted-foreground">Descripción:</span>{" "}
-                <span>{detectionResult.description}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -400,3 +463,4 @@ export default function PetForm({ userId, pet }: PetFormProps) {
     </form>
   )
 }
+
